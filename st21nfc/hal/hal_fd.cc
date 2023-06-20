@@ -19,6 +19,7 @@
 #define LOG_TAG "NfcHalFd"
 #include "hal_fd.h"
 #include <cutils/properties.h>
+#include <sys/system_properties.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <hardware/nfc.h>
@@ -90,6 +91,8 @@ int hal_fd_init() {
   char ConfPath[256];
   char fwBinName[256];
   char fwConfName[256];
+  char dualsim_prop[PROPERTY_VALUE_MAX] = {0};
+  int ret = 0;
 
   STLOG_HAL_D("  %s - enter", __func__);
 
@@ -114,11 +117,23 @@ int hal_fd_init() {
     STLOG_HAL_D(
         "%s - FW config file name not found in conf. use default name "
         "/st21nfc_conf.bin \n", __func__);
-    strcpy(fwConfName, "/st21nfc_conf.bin");
+    ret = __system_property_get("persist.vendor.radio.multisim.config", dualsim_prop);
+    if (ret <= 0) {
+      STLOG_HAL_D("%s - Failed to read multisim property", __func__);
+      strcpy(fwConfName, "/st21nfc_conf.bin");
+      strcpy(ConfPath, FwPath);
+    } else if (!strcmp(dualsim_prop, "dsds")) {
+      STLOG_HAL_D("%s - Using DSDS config", __func__);
+      strcpy(fwConfName, "/st21nfc_conf_ds.txt");
+      strcpy(ConfPath, "/vendor/etc");
+    } else {
+      STLOG_HAL_D("%s - Using SS config", __func__);
+      strcpy(fwConfName, "/st21nfc_conf_ss.txt");
+      strcpy(ConfPath, "/vendor/etc");
+    }
   }
 
   // Getting information about FW patch, if any
-  strcpy(ConfPath, FwPath);
   strncat(FwPath, fwBinName, sizeof(FwPath) - strlen(FwPath) - 1);
   strncat(ConfPath, fwConfName, sizeof(ConfPath) - strlen(ConfPath) - 1);
   STLOG_HAL_D("%s - FW update binary file = %s", __func__, FwPath);
